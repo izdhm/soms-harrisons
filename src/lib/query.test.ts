@@ -36,6 +36,14 @@ describe('serializeUrlState', () => {
     expect(serializeUrlState({ query: DEFAULT_QUERY, orderId: null })).toBe('')
   })
 
+  it('measures defaults against the configured list settings', () => {
+    const defaults = { ...DEFAULT_QUERY, pageSize: 50, sort: 'SalesId' as const, order: 'asc' as const }
+    const state = { query: { ...defaults }, orderId: null }
+    expect(serializeUrlState(state, defaults)).toBe('')
+    expect(parseUrlState('', defaults).query).toEqual(defaults)
+    expect(parseUrlState('?pageSize=7', defaults).query.pageSize).toBe(50)
+  })
+
   it('round-trips through parseUrlState', () => {
     const state = {
       query: { ...DEFAULT_QUERY, q: 'Wong', site: 'KK01', page: 2, order: 'asc' as const },

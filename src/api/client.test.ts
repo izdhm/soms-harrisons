@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_QUERY } from '../lib/query'
-import { jsonResponse, makeList, makeOrder } from '../test/fixtures'
-import { ApiError, fetchOrder, fetchOrders } from './client'
+import { META, jsonResponse, makeList, makeOrder } from '../test/fixtures'
+import { ApiError, fetchOrder, fetchOrders, testConnection } from './client'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -119,5 +119,28 @@ describe('fetchOrder', () => {
       status: 404,
       message: 'The requested order could not be found.',
     })
+  })
+})
+
+describe('testConnection', () => {
+  const config = { baseUrl: 'https://api.test/sales-orders', apiKey: 'typed-key', timeoutMs: 15_000 }
+
+  it('sends the typed key and reports the meta details', async () => {
+    stubFetch()
+    fetchMock.mockResolvedValue(jsonResponse(META))
+
+    await expect(testConnection(config)).resolves.toMatchObject({ version: '1.1.0', sites: 2, statuses: 4 })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toBe('https://api.test/sales-orders/meta')
+    expect((init?.headers as Record<string, string>)['x-assessment-key']).toBe('typed-key')
+  })
+
+  it('fails with the access key message when the API rejects the key', async () => {
+    stubFetch()
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'Unauthorized' }, 401))
+
+    const err = await testConnection(config).catch((e: unknown) => e)
+    expect(err).toMatchObject({ kind: 'http', status: 401 })
+    expect((err as ApiError).message).toMatch(/access key/i)
   })
 })

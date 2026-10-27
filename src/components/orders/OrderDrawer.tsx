@@ -1,11 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { fetchOrder } from '../api/client'
-import type { SalesOrder } from '../api/types'
-import { useApi } from '../hooks/useApi'
-import { formatCurrency, formatDate, formatDateTime, orDash } from '../lib/format'
-import { CloseIcon } from './Icons'
-import { ErrorState, Skeleton } from './States'
-import { StatusBadge } from './StatusBadge'
+import { fetchOrder } from '../../api/client'
+import type { SalesOrder } from '../../api/types'
+import { useApi } from '../../hooks/useApi'
+import { useFormat } from '../../hooks/useFormat'
+import { orDash } from '../../lib/format'
+import { useSettings } from '../../settings/SettingsContext'
+import { CloseIcon } from '../Icons'
+import { ErrorState, Skeleton } from '../States'
+import { StatusBadge } from '../StatusBadge'
 
 interface OrderDrawerProps {
   salesId: string
@@ -47,6 +49,9 @@ function DetailSkeleton() {
 }
 
 function OrderDetail({ order }: { order: SalesOrder }) {
+  const fmt = useFormat()
+  const { branchName } = useSettings()
+  const branch = branchName(order.InventSiteId)
   return (
     <>
       <div className="detail__hero">
@@ -57,22 +62,22 @@ function OrderDetail({ order }: { order: SalesOrder }) {
       <div className="detail__amounts">
         <div className="detail__amount detail__amount--total">
           <span>Order amount</span>
-          <strong>{formatCurrency(order.HAR_TotalSOAmount)}</strong>
+          <strong>{fmt.currency(order.HAR_TotalSOAmount)}</strong>
         </div>
         <div className="detail__amount">
           <span>Invoiced</span>
-          <strong>{formatCurrency(order.HAR_InvoicedAmount)}</strong>
+          <strong>{fmt.currency(order.HAR_InvoicedAmount)}</strong>
         </div>
         <div className="detail__amount">
           <span>Balance</span>
-          <strong>{formatCurrency(order.HAR_BalanceAmount)}</strong>
+          <strong>{fmt.currency(order.HAR_BalanceAmount)}</strong>
         </div>
       </div>
 
       <Section title="Order">
-        <Field label="Order date">{formatDateTime(order.CreatedDateTime1)}</Field>
-        <Field label="Requested ship date">{formatDate(order.ShippingDateRequested)}</Field>
-        <Field label="Last modified">{formatDateTime(order.ModifiedDateTime1)}</Field>
+        <Field label="Order date">{fmt.dateTime(order.CreatedDateTime1)}</Field>
+        <Field label="Requested ship date">{fmt.date(order.ShippingDateRequested)}</Field>
+        <Field label="Last modified">{fmt.dateTime(order.ModifiedDateTime1)}</Field>
         <Field label="Sales type">{orDash(order.SalesType)}</Field>
         <Field label="Document status">{orDash(order.DocumentStatus)}</Field>
         <Field label="Release status">{orDash(order.ReleaseStatus)}</Field>
@@ -88,7 +93,10 @@ function OrderDetail({ order }: { order: SalesOrder }) {
       </Section>
 
       <Section title="Branch and delivery">
-        <Field label="Branch / site">{orDash(order.InventSiteId)}</Field>
+        <Field label="Branch / site">
+          {order.InventSiteId}
+          {branch !== order.InventSiteId && <span className="detail__muted"> ({branch})</span>}
+        </Field>
         <Field label="Item group">{orDash(order.DOT_ItemGroupId)}</Field>
         <Field label="Sales district">{orDash(order.SalesDistrictDescription)}</Field>
         <Field label="Delivery district">

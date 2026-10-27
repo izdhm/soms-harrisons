@@ -1,178 +1,160 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
-import type { OrdersListResponse } from './api/types'
-import { META, jsonResponse, makeList, makeOrder } from './test/fixtures'
+import { SETTINGS_STORAGE_KEY } from './settings/defaults'
+import { installApiMock } from './test/apiMock'
+import { makeOrder } from './test/fixtures'
+import { renderApp, resetBrowserState } from './test/render'
 
 const ORDERS = [
   makeOrder(),
   makeOrder({
     SalesId: 'SO-MOCK-00002',
     SalesName: 'John Distribution Sdn Bhd',
-    CustAccount: 'C10002',
     InventSiteId: 'C30',
     SalesStatus: 'Invoiced',
     HAR_TotalSOAmount: 274.7,
+    HAR_BalanceAmount: 0,
+  }),
+  makeOrder({
+    SalesId: 'SO-MOCK-00003',
+    SalesName: 'Borneo Fresh Trading',
+    SalesStatus: 'Cancelled',
+    HAR_TotalSOAmount: 63.0,
   }),
 ]
 
-type ListHandler = (params: URLSearchParams) => Response | Promise<Response>
-
-let listHandler: ListHandler
-const fetchMock = vi.fn<typeof fetch>()
-
-function listCalls(): URLSearchParams[] {
-  return fetchMock.mock.calls
-    .map(([url]) => new URL(String(url)))
-    .filter((u) => u.pathname === '/sales-orders')
-    .map((u) => u.searchParams)
-}
-
 beforeEach(() => {
-  window.history.replaceState(null, '', '/')
-  listHandler = () => jsonResponse(makeList(ORDERS))
-  fetchMock.mockImplementation(async (input) => {
-    const url = new URL(String(input))
-    if (url.pathname.endsWith('/meta')) return jsonResponse(META)
-    if (url.pathname === '/sales-orders') return listHandler(url.searchParams)
-    const id = decodeURIComponent(url.pathname.split('/').pop() ?? '')
-    const order = ORDERS.find((o) => o.SalesId === id)
-    return order ? jsonResponse({ data: order }) : jsonResponse({ error: 'Not found' }, 404)
-  })
-  vi.stubGlobal('fetch', fetchMock)
+  resetBrowserState()
+  installApiMock(ORDERS)
 })
 
 afterEach(() => {
-  fetchMock.mockReset()
   vi.unstubAllGlobals()
 })
 
-describe('App', () => {
-  it('shows dashboard totals and the order list from the API', async () => {
-    render(<App />)
+describe('Public pages and sign in', () => {
+  it('opens on the sign-in page', () => {
+    renderApp('/', { signedIn: false })
 
-    expect(await screen.findByText('SO-MOCK-00001')).toBeInTheDocument()
-    const overview = within(screen.getByRole('region', { name: 'Overview' }))
-    expect(overview.getByText('1,200')).toBeInTheDocument()
-    expect(overview.getByText('660')).toBeInTheDocument()
-    expect(overview.getByText('RM 998,244.30')).toBeInTheDocument()
-    expect(screen.getByText('John Distribution Sdn Bhd')).toBeInTheDocument()
-    expect(screen.getByText('RM 274.70')).toBeInTheDocument()
-  })
-
-  it('sends search text to the API after typing stops', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-    await screen.findByText('SO-MOCK-00001')
-
-    await user.type(screen.getByRole('searchbox', { name: /search orders/i }), 'Siti')
-
-    await waitFor(() => expect(listCalls().at(-1)?.get('q')).toBe('Siti'))
-    expect(listCalls().filter((p) => p.has('q'))).toHaveLength(1)
-    expect(window.location.search).toContain('q=Siti')
-  })
-
-  it('filters by branch and status', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-    await screen.findByText('SO-MOCK-00001')
-
-    await user.selectOptions(screen.getByLabelText('Branch'), 'B20')
-    await user.selectOptions(screen.getByLabelText('Status'), 'Invoiced')
-
-    await waitFor(() => {
-      const last = listCalls().at(-1)
-      expect(last?.get('site')).toBe('B20')
-      expect(last?.get('status')).toBe('Invoiced')
-      expect(last?.get('page')).toBe('1')
-    })
-  })
-
-  it('shows an empty state and lets the user clear filters', async () => {
-    const user = userEvent.setup()
-    window.history.replaceState(null, '', '/?q=nothing-matches')
-    listHandler = (params) =>
-      jsonResponse(params.get('q') ? makeList([]) : makeList(ORDERS))
-    render(<App />)
-
-    expect(await screen.findByText('No orders match your search and filters')).toBeInTheDocument()
-    const emptyState = screen.getByRole('status')
-    await user.click(within(emptyState).getByRole('button', { name: 'Clear filters' }))
-
-    expect(await screen.findByText('SO-MOCK-00001')).toBeInTheDocument()
-    expect(screen.getByRole('searchbox', { name: /search orders/i })).toHaveValue('')
-  })
-
-  it('shows an error state and recovers on retry', async () => {
-    const user = userEvent.setup()
-    let fail = true
-    listHandler = () =>
-      fail ? jsonResponse({ error: 'Boom' }, 500) : jsonResponse(makeList(ORDERS))
-    render(<App />)
-
-    expect(await screen.findByText('Unable to load orders')).toBeInTheDocument()
-    expect(screen.getByText('Unable to load the dashboard')).toBeInTheDocument()
-
-    fail = false
-    await user.click(screen.getAllByRole('button', { name: 'Try again' })[0])
-
-    expect(await screen.findByText('SO-MOCK-00001')).toBeInTheDocument()
-    expect(screen.queryByText('Unable to load orders')).not.toBeInTheDocument()
-  })
-
-  it('keeps the latest response when an older one resolves late', async () => {
-    const user = userEvent.setup()
-    let releaseSlow: (r: Response) => void = () => {}
-    listHandler = (params) => {
-      if (params.get('site') === 'A10') {
-        return new Promise<Response>((resolve) => {
-          releaseSlow = resolve
-        })
-      }
-      const site = params.get('site')
-      return jsonResponse(
-        makeList(site ? ORDERS.filter((o) => o.InventSiteId === site) : ORDERS),
-      )
-    }
-    render(<App />)
-    await screen.findByText('SO-MOCK-00001')
-
-    await user.selectOptions(screen.getByLabelText('Branch'), 'A10')
-    await user.selectOptions(screen.getByLabelText('Branch'), 'B20')
-    await waitFor(() => expect(screen.queryByText('SO-MOCK-00002')).not.toBeInTheDocument())
-
-    const stale: OrdersListResponse = makeList([ORDERS[1]])
-    releaseSlow(jsonResponse(stale))
-    await new Promise((r) => setTimeout(r, 20))
-
-    expect(screen.getByText('SO-MOCK-00001')).toBeInTheDocument()
-    expect(screen.queryByText('SO-MOCK-00002')).not.toBeInTheDocument()
-  })
-
-  it('opens order details from the table and closes with Escape', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'SO-MOCK-00002' }))
-
-    const dialog = await screen.findByRole('dialog', { name: 'SO-MOCK-00002' })
-    expect(within(dialog).getByText('John Distribution Sdn Bhd')).toBeInTheDocument()
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith('/SO-MOCK-00002'))).toBe(true),
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sign in')
+    expect(screen.getByLabelText('Work email')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tom Fisk' })).toHaveAttribute(
+      'href',
+      'https://www.pexels.com/photo/aerial-view-of-cargo-ship-1554646/',
     )
-    expect(window.location.search).toContain('order_id=SO-MOCK-00002')
-
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(window.location.search).not.toContain('order_id')
   })
 
-  it('shows not found for a deep link to a missing order', async () => {
-    window.history.replaceState(null, '', '/?order_id=SO-NOPE')
-    render(<App />)
+  it('sends signed-out visitors to the sign-in page', async () => {
+    renderApp('/app/orders', { signedIn: false })
 
-    const dialog = await screen.findByRole('dialog')
-    expect(await within(dialog).findByText('Order not found')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('rejects a wrong password', async () => {
+    const user = userEvent.setup()
+    renderApp('/', { signedIn: false })
+
+    await user.type(screen.getByLabelText('Work email'), 'nobody@example.com')
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect email or password.')
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('keeps the old sign-in link working', () => {
+    renderApp('/login', { signedIn: false })
+
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  })
+
+  it('signs in with the demo account and returns to the requested page', async () => {
+    const user = userEvent.setup()
+    renderApp('/app/orders', { signedIn: false })
+
+    await user.click(await screen.findByRole('button', { name: 'Use demo account' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('heading', { name: 'Sales orders' }, { timeout: 3000 })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/app/orders')
+    expect(sessionStorage.getItem('soms.session')).toContain('u-0001')
+  })
+
+  it('signs out from the account menu', async () => {
+    const user = userEvent.setup()
+    renderApp('/app/dashboard')
+
+    await user.click(await screen.findByRole('button', { name: 'Account menu' }))
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(sessionStorage.getItem('soms.session')).toBeNull()
+  })
+})
+
+describe('Signed-in system', () => {
+  it('builds the dashboard tiles from the full order list', async () => {
+    renderApp('/app/dashboard')
+
+    const tile = async (label: string) =>
+      (await screen.findByText(label, { selector: '.tile__label' })).closest('.tile') as HTMLElement
+
+    expect(within(await tile('Total orders')).getByText('3')).toBeInTheDocument()
+    expect(within(await tile('Open / pending')).getByText('1')).toBeInTheDocument()
+    expect(within(await tile('Cancelled')).getByText('1')).toBeInTheDocument()
+    expect(within(await tile('Total order value')).getByTitle('RM 500.05')).toBeInTheDocument()
+    expect(within(await tile('Outstanding balance')).getByTitle('RM 162.35')).toBeInTheDocument()
+    expect(screen.getAllByText('Borneo Fresh Trading').length).toBeGreaterThan(0)
+  })
+
+  it('greets the signed-in user with the date and time', async () => {
+    renderApp('/app/dashboard')
+
+    const banner = await screen.findByRole('region', { name: 'Welcome' })
+    expect(within(banner).getByRole('heading')).toHaveTextContent(/^Good (morning|afternoon|evening), Amir$/)
+    expect(banner.querySelector('time')).toHaveTextContent(/^\d{1,2}:\d{2}:\d{2} (AM|PM)$/)
+    expect(within(banner).getByText('Malaysia (UTC+08:00)')).toBeInTheDocument()
+  })
+
+  it('shows a placeholder for planned modules', async () => {
+    renderApp('/app/invoices')
+
+    expect(await screen.findByRole('heading', { name: 'Invoices' })).toBeInTheDocument()
+    const card = screen.getByText('Invoices is planned for a later release').closest('.placeholder') as HTMLElement
+    expect(within(card).getByRole('link', { name: /Sales orders/ })).toHaveAttribute('href', '/app/orders')
+  })
+
+  it('saves system settings and keeps them after a reload', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderApp('/app/settings')
+
+    const company = await screen.findByLabelText('Company name')
+    expect(window.location.pathname).toBe('/app/settings/general')
+    await user.clear(company)
+    await user.type(company, 'Harrisons Test Branch')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(await screen.findByText('Settings saved.')).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY)!).general.companyName).toBe(
+      'Harrisons Test Branch',
+    )
+
+    unmount()
+    renderApp('/app/settings/general')
+    expect(await screen.findByLabelText('Company name')).toHaveValue('Harrisons Test Branch')
+  })
+
+  it('blocks saving an invalid value', async () => {
+    const user = userEvent.setup()
+    renderApp('/app/settings/orders')
+
+    const threshold = await screen.findByLabelText('High-value threshold')
+    await user.clear(threshold)
+    await user.type(threshold, '0')
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   })
 })

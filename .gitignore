@@ -5,9 +5,9 @@ coverage
 .env
 .env.local
 .env.*.local
-.vercel
 .netlify
 .DS_Store
 
-# Assessment brief (keep out of the public repo)
+# Local-only documents (assessment brief, interview guide): keep out of the public repo
+docs/
 *.pdf

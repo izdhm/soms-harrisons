@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Facet, OrderQuery, SortField, SortOrder } from '../api/types'
-import { useDebouncedValue } from '../hooks/useDebouncedValue'
-import { hasActiveFilters } from '../lib/query'
-import { STATUS_ORDER } from '../lib/status'
-import { ChevronDownIcon, CloseIcon, FilterResetIcon, SearchIcon } from './Icons'
+import type { Facet, OrderQuery, SortField, SortOrder } from '../../api/types'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { hasActiveFilters } from '../../lib/query'
+import { useSettings } from '../../settings/SettingsContext'
+import { ChevronDownIcon, CloseIcon, FilterResetIcon, SearchIcon } from '../Icons'
 
 const SEARCH_DEBOUNCE_MS = 350
 
-const SORT_OPTIONS: { label: string; sort: SortField; order: SortOrder }[] = [
+export const SORT_OPTIONS: { label: string; sort: SortField; order: SortOrder }[] = [
   { label: 'Order date, newest first', sort: 'CreatedDateTime1', order: 'desc' },
   { label: 'Order date, oldest first', sort: 'CreatedDateTime1', order: 'asc' },
   { label: 'Amount, highest first', sort: 'HAR_TotalSOAmount', order: 'desc' },
@@ -23,7 +23,6 @@ const SORT_OPTIONS: { label: string; sort: SortField; order: SortOrder }[] = [
 interface FiltersProps {
   query: OrderQuery
   sites: Facet[] | null
-  statuses: Facet[] | null
   onChange: (patch: Partial<OrderQuery>) => void
   onReset: () => void
 }
@@ -33,7 +32,8 @@ function withCurrent(options: string[], current: string): string[] {
   return current && !options.includes(current) ? [...options, current] : options
 }
 
-export function Filters({ query, sites, statuses, onChange, onReset }: FiltersProps) {
+export function Filters({ query, sites, onChange, onReset }: FiltersProps) {
+  const { branchName } = useSettings()
   const [text, setText] = useState(query.q)
   const debouncedText = useDebouncedValue(text, SEARCH_DEBOUNCE_MS)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -43,19 +43,13 @@ export function Filters({ query, sites, statuses, onChange, onReset }: FiltersPr
     if (debouncedText.trim() !== query.q.trim()) onChange({ q: debouncedText })
   }, [debouncedText])
 
-  // Filters cleared elsewhere (e.g. the reset button) must also clear the box.
+  // Filters changed elsewhere (reset button, global search) must also update the box.
   useEffect(() => {
     setText((current) => (current.trim() === query.q.trim() ? current : query.q))
   }, [query.q])
 
   const siteOptions = withCurrent(sites?.map((s) => s.value) ?? [], query.site)
-  const statusOptions = withCurrent(
-    statuses?.map((s) => s.value) ?? [...STATUS_ORDER],
-    query.status,
-  )
-  const siteCounts = new Map(sites?.map((s) => [s.value, s.count]))
   const sortValue = `${query.sort}:${query.order}`
-  const filtersActive = hasActiveFilters(query)
 
   return (
     <div className="filters" role="search">
@@ -109,31 +103,14 @@ export function Filters({ query, sites, statuses, onChange, onReset }: FiltersPr
           onChange={(e) => onChange({ site: e.target.value })}
         >
           <option value="">All branches</option>
-          {siteOptions.map((site) => (
-            <option key={site} value={site}>
-              {siteCounts.has(site) ? `${site} (${siteCounts.get(site)})` : site}
-            </option>
-          ))}
-        </select>
-        <ChevronDownIcon className="field__chevron" />
-      </div>
-
-      <div className="field field--select">
-        <label htmlFor="filter-status" className="field__label">
-          Status
-        </label>
-        <select
-          id="filter-status"
-          className="select"
-          value={query.status}
-          onChange={(e) => onChange({ status: e.target.value })}
-        >
-          <option value="">All statuses</option>
-          {statusOptions.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
+          {siteOptions.map((site) => {
+            const name = branchName(site)
+            return (
+              <option key={site} value={site}>
+                {name === site ? site : `${site}, ${name}`}
+              </option>
+            )
+          })}
         </select>
         <ChevronDownIcon className="field__chevron" />
       </div>
@@ -167,7 +144,7 @@ export function Filters({ query, sites, statuses, onChange, onReset }: FiltersPr
           setText('')
           onReset()
         }}
-        disabled={!filtersActive}
+        disabled={!hasActiveFilters(query)}
       >
         <FilterResetIcon width="16" height="16" />
         Clear filters

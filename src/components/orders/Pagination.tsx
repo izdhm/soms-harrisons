@@ -1,6 +1,6 @@
-import { formatNumber } from '../lib/format'
-import { PAGE_SIZES, pageWindow } from '../lib/query'
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons'
+import { useFormat } from '../../hooks/useFormat'
+import { PAGE_SIZES, pageWindow } from '../../lib/query'
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from '../Icons'
 
 interface PaginationProps {
   page: number
@@ -21,6 +21,7 @@ export function Pagination({
   onPageChange,
   onPageSizeChange,
 }: PaginationProps) {
+  const { number: formatNumber } = useFormat()
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1
   const last = Math.min(page * pageSize, total)
 

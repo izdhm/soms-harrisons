@@ -22,37 +22,43 @@ function positiveInt(value: string | null, fallback: number): number {
   return Number.isInteger(n) && n > 0 ? n : fallback
 }
 
-/** Reads list filters and the open order from a location search string. Invalid values fall back to defaults. */
-export function parseUrlState(search: string): UrlState {
+/**
+ * Reads list filters and the open order from a location search string.
+ * Invalid values fall back to `defaults` (the user's configured list defaults).
+ */
+export function parseUrlState(search: string, defaults: OrderQuery = DEFAULT_QUERY): UrlState {
   const params = new URLSearchParams(search)
-  const pageSize = positiveInt(params.get('pageSize'), DEFAULT_QUERY.pageSize)
+  const pageSize = positiveInt(params.get('pageSize'), defaults.pageSize)
   const sort = params.get('sort')
   const order = params.get('order')
 
   return {
     query: {
-      page: positiveInt(params.get('page'), DEFAULT_QUERY.page),
-      pageSize: (PAGE_SIZES as readonly number[]).includes(pageSize) ? pageSize : DEFAULT_QUERY.pageSize,
+      page: positiveInt(params.get('page'), 1),
+      pageSize: (PAGE_SIZES as readonly number[]).includes(pageSize) ? pageSize : defaults.pageSize,
       q: params.get('q') ?? '',
       status: params.get('status') ?? '',
       site: params.get('site') ?? '',
-      sort: SORT_FIELDS.includes(sort as SortField) ? (sort as SortField) : DEFAULT_QUERY.sort,
-      order: order === 'asc' || order === 'desc' ? (order as SortOrder) : DEFAULT_QUERY.order,
+      sort: SORT_FIELDS.includes(sort as SortField) ? (sort as SortField) : defaults.sort,
+      order: order === 'asc' || order === 'desc' ? (order as SortOrder) : defaults.order,
     },
     orderId: params.get('order_id') || null,
   }
 }
 
 /** Writes only non-default values so shared links stay short. */
-export function serializeUrlState({ query, orderId }: UrlState): string {
+export function serializeUrlState(
+  { query, orderId }: UrlState,
+  defaults: OrderQuery = DEFAULT_QUERY,
+): string {
   const params = new URLSearchParams()
   if (query.q.trim()) params.set('q', query.q.trim())
   if (query.status) params.set('status', query.status)
   if (query.site) params.set('site', query.site)
-  if (query.sort !== DEFAULT_QUERY.sort) params.set('sort', query.sort)
-  if (query.order !== DEFAULT_QUERY.order) params.set('order', query.order)
-  if (query.pageSize !== DEFAULT_QUERY.pageSize) params.set('pageSize', String(query.pageSize))
-  if (query.page !== DEFAULT_QUERY.page) params.set('page', String(query.page))
+  if (query.sort !== defaults.sort) params.set('sort', query.sort)
+  if (query.order !== defaults.order) params.set('order', query.order)
+  if (query.pageSize !== defaults.pageSize) params.set('pageSize', String(query.pageSize))
+  if (query.page !== 1) params.set('page', String(query.page))
   if (orderId) params.set('order_id', orderId)
   const qs = params.toString()
   return qs ? `?${qs}` : ''

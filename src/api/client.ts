@@ -1,4 +1,4 @@
-import { API_BASE_URL, API_KEY, REQUEST_TIMEOUT_MS } from '../config'
+import { getApiConfig, type ApiConfig } from './config'
 import type {
   MetaResponse,
   OrderDetailResponse,
@@ -23,19 +23,19 @@ export class ApiError extends Error {
 
 type Params = Record<string, string | number | undefined>
 
-export function buildUrl(path: string, params: Params = {}): string {
+export function buildUrl(path: string, params: Params = {}, config = getApiConfig()): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === '') continue
     search.set(key, String(value))
   }
   const qs = search.toString()
-  return `${API_BASE_URL}${path}${qs ? `?${qs}` : ''}`
+  return `${config.baseUrl}${path}${qs ? `?${qs}` : ''}`
 }
 
 function messageForStatus(status: number, apiMessage: string | undefined): string {
   if (status === 401 || status === 403) {
-    return 'The API rejected the access key. Check VITE_API_KEY.'
+    return 'The API rejected the access key. Check the API key in System settings.'
   }
   if (status === 404) return 'The requested order could not be found.'
   if (status === 429) return 'Too many requests. Please wait a moment and try again.'
@@ -43,9 +43,14 @@ function messageForStatus(status: number, apiMessage: string | undefined): strin
   return apiMessage ?? `Request failed (HTTP ${status}).`
 }
 
-async function request<T>(path: string, params?: Params, signal?: AbortSignal): Promise<T> {
-  if (!API_KEY) {
-    throw new ApiError('API key is not configured. Set VITE_API_KEY and rebuild.', 'config')
+async function request<T>(
+  path: string,
+  params?: Params,
+  signal?: AbortSignal,
+  config: ApiConfig = getApiConfig(),
+): Promise<T> {
+  if (!config.apiKey) {
+    throw new ApiError('API key is not configured. Add it in System settings or VITE_API_KEY.', 'config')
   }
 
   // One controller covers both the caller's cancellation and our own timeout.
@@ -54,13 +59,13 @@ async function request<T>(path: string, params?: Params, signal?: AbortSignal): 
   const timer = setTimeout(() => {
     timedOut = true
     controller.abort()
-  }, REQUEST_TIMEOUT_MS)
+  }, config.timeoutMs)
   const forwardAbort = () => controller.abort()
   signal?.addEventListener('abort', forwardAbort)
 
   try {
-    const res = await fetch(buildUrl(path, params), {
-      headers: { 'x-assessment-key': API_KEY, Accept: 'application/json' },
+    const res = await fetch(buildUrl(path, params, config), {
+      headers: { 'x-assessment-key': config.apiKey, Accept: 'application/json' },
       signal: controller.signal,
     })
 
@@ -115,6 +120,46 @@ export async function fetchOrder(salesId: string, signal?: AbortSignal): Promise
   return res.data
 }
 
-export function fetchMeta(signal?: AbortSignal): Promise<MetaResponse> {
-  return request<MetaResponse>('/meta', {}, signal)
+export function fetchMeta(signal?: AbortSignal, config?: ApiConfig): Promise<MetaResponse> {
+  return request<MetaResponse>('/meta', {}, signal, config)
+}
+
+/** Pages through every order matching `query`, a few pages at a time. */
+export async function fetchAllOrders(
+  query: Pick<OrderQuery, 'q' | 'status' | 'site' | 'sort' | 'order'>,
+  signal?: AbortSignal,
+): Promise<SalesOrder[]> {
+  const pageSize = 100
+  const first = await fetchOrders({ ...query, page: 1, pageSize }, signal)
+  const rest: SalesOrder[][] = []
+  const pages = Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, i) => i + 2)
+  const CONCURRENCY = 4
+  for (let i = 0; i < pages.length; i += CONCURRENCY) {
+    const batch = await Promise.all(
+      pages
+        .slice(i, i + CONCURRENCY)
+        .map((page) => fetchOrders({ ...query, page, pageSize }, signal).then((r) => r.data)),
+    )
+    rest.push(...batch)
+  }
+  return first.data.concat(...rest)
+}
+
+export interface ConnectionResult {
+  latencyMs: number
+  version: string
+  sites: number
+  statuses: number
+}
+
+/** Calls the meta endpoint with unsaved settings so admins can check them before saving. */
+export async function testConnection(config: ApiConfig): Promise<ConnectionResult> {
+  const started = performance.now()
+  const meta = await fetchMeta(undefined, config)
+  return {
+    latencyMs: Math.round(performance.now() - started),
+    version: meta.version,
+    sites: meta.facets.sites.length,
+    statuses: meta.facets.statuses.length,
+  }
 }
