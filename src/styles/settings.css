@@ -181,6 +181,20 @@
   color: var(--text);
 }
 
+.text-field:has(input:disabled) {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.text-field__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 100%;
+  color: var(--muted);
+}
+
 .switch {
   position: relative;
   flex: none;

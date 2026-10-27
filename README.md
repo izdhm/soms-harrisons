@@ -52,7 +52,7 @@ A sales order monitoring system for Harrisons Sabah Sdn Bhd, built for the IT Ex
   | Appearance | Theme (light, dark, follow system), table density, default sidebar state |
   | Sales orders | Rows per page, default sort, high-value threshold, high-value flag in the table |
   | Branches | Display names for each site code from `/meta`, used across the app |
-  | Data and API | Base URL, API key, request timeout, auto-refresh interval, dashboard cache, connection test |
+  | Data and API | Base URL, API key (built in and locked), request timeout, auto-refresh interval, dashboard cache, connection test |
   | Notifications | Which alerts the bell shows, the aged-order threshold |
   | Security | Idle session timeout, allow "Keep me signed in" |
   | System information | Version, environment, API endpoint and version, branch count |
@@ -84,11 +84,10 @@ Clone this repository, then from the project folder:
 
 ```bash
 npm install
-cp .env.example .env.local   # the API address and the key from the brief
-npm run dev                  # http://localhost:5173
+npm run dev    # http://localhost:5173
 ```
 
-In the Windows Command Prompt, use `copy .env.example .env.local` instead of `cp`. PowerShell and Git Bash accept `cp`.
+No setup file is needed: the API address and the public key from the brief are built in.
 
 | Script | Purpose |
 | --- | --- |
@@ -103,10 +102,10 @@ In the Windows Command Prompt, use `copy .env.example .env.local` instead of `cp
 
 | Name | Required | Default |
 | --- | --- | --- |
-| `VITE_API_KEY` | Yes, unless entered in System settings | none |
+| `VITE_API_KEY` | No | The public key from the brief |
 | `VITE_API_BASE_URL` | No | `https://hiring.harrisons.my/api/mock/sales-orders` |
 
-`.env.example` already holds the values from the brief, and `.env.local` is ignored by git. Values entered under System settings > Data and API override these for that browser; leaving a field blank falls back to the build value. Without a key, the app shows "API key is not configured" instead of data.
+Both are optional. To point a build at another API, copy `.env.example` to `.env.local` (ignored by git) and change the values. The key is fixed when the app is built, so every visitor sees data straight away; System settings shows it locked, and only the base URL can be changed there, per browser.
 
 ## Design
 
@@ -187,7 +186,7 @@ src/
 - **Authentication:** every request sends the `x-assessment-key` header. The API also accepts `Authorization: Bearer`, which SOMS does not need. The API allows cross-origin requests, so the browser calls it directly.
 - **Server-side work on the list:** `q`, `site`, `status`, `sort`, `order`, `page` and `pageSize` are passed to the API. Nothing is hard-coded.
 - **Race conditions:** each request has an `AbortController`. When filters change quickly, older requests are cancelled and their late responses are ignored.
-- **Timeouts and errors:** the timeout is configurable (15 seconds by default). Network failures, timeouts, 401/403 (points to the API key setting), 404, 429 and 5xx are mapped to clear messages with a retry action. If a background refresh fails, the last good data stays visible with a warning.
+- **Timeouts and errors:** the timeout is configurable (15 seconds by default). Network failures, timeouts, 401/403 (asks the user to contact the administrator), 404, 429 and 5xx are mapped to clear messages with a retry action. If a background refresh fails, the last good data stays visible with a warning.
 - **Input safety:** values from the URL are validated (page size, sort field and direction) before they reach the API. CSV cells that start with `=`, `+`, `-` or `@` are escaped so spreadsheets do not run them as formulas.
 - **Dates and money:** dates use the configured time zone (Malaysia by default), so an order at 20:30 UTC on 30 Sep is counted on 1 Oct. Amounts are in ringgit.
 - **API behaviour observed by testing it directly (27 October 2026):**
@@ -200,7 +199,7 @@ src/
 
 ## Testing
 
-`npm test` runs 66 tests in 7 files:
+`npm test` runs 67 tests in 7 files:
 
 - **Unit:** formatting in different time zones, date formats and currency styles; the welcome clock and greeting; URL state with configured defaults; pagination window; CSV quoting and formula escaping; every analytics function (totals, month grouping across the UTC day boundary, status order, branch ranking, aging buckets, attention lists, axis scales).
 - **API client:** auth header and query parameters, 401 / 404 / 5xx handling, network failure, timeout and cancellation, and the connection test (meta details, rejected key).
@@ -208,7 +207,7 @@ src/
 - **App:**
   - Sign in: the home page and photo credit, the redirect to sign in, a wrong password, the old `/login` link, demo sign-in returning to the requested page, and sign out.
   - Workspace: dashboard tiles from the full dataset, the welcome banner (greeting, date and live clock), and placeholder modules.
-  - Settings: saved values persist after a reload, and an invalid value blocks saving.
+  - Settings: saved values persist after a reload, an invalid value blocks saving, and the API key stays locked (a key saved by an older version is ignored).
 
 Checks beyond the test suite:
 
@@ -221,7 +220,7 @@ Checks beyond the test suite:
 
 - **Demo sign-in only:** the assessment has no user API, so the account is checked in the browser against a seed file. A real system would authenticate on a server and issue a session cookie.
 - **Settings are per browser:** they are saved in `localStorage`, not shared between users.
-- **Key visible in the browser:** the API key is bundled into the front end. That is acceptable for this public, read-only assessment key. A real system would keep it behind a server-side proxy, for example a Netlify Function.
+- **Key visible in the browser:** the API key is built into the front end. That is acceptable for this public, read-only assessment key. A real system would keep it behind a server-side proxy, for example a Netlify Function.
 - **Dashboard loads the full list:** this suits 1,200 orders. For a large dataset the aggregation would move to an API endpoint.
 - **Read-only:** the API only allows `GET`, so there are no create, edit or delete actions. Modules marked "Soon" are placeholders.
 

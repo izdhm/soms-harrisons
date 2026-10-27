@@ -35,7 +35,7 @@ export function buildUrl(path: string, params: Params = {}, config = getApiConfi
 
 function messageForStatus(status: number, apiMessage: string | undefined): string {
   if (status === 401 || status === 403) {
-    return 'The API rejected the access key. Check the API key in System settings.'
+    return 'The API rejected the access key. Please contact the system administrator.'
   }
   if (status === 404) return 'The requested order could not be found.'
   if (status === 429) return 'Too many requests. Please wait a moment and try again.'
@@ -50,7 +50,7 @@ async function request<T>(
   config: ApiConfig = getApiConfig(),
 ): Promise<T> {
   if (!config.apiKey) {
-    throw new ApiError('API key is not configured. Add it in System settings or VITE_API_KEY.', 'config')
+    throw new ApiError('The API key is not configured. Set VITE_API_KEY and rebuild the app.', 'config')
   }
 
   // One controller covers both the caller's cancellation and our own timeout.

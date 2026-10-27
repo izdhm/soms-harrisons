@@ -30,7 +30,6 @@ export interface Settings {
   api: {
     /** Empty means "use the build default". */
     baseUrl: string
-    apiKey: string
     timeoutSeconds: number
     refreshMinutes: number
     cacheMinutes: number
@@ -81,7 +80,6 @@ export const DEFAULT_SETTINGS: Settings = {
   branches: {},
   api: {
     baseUrl: '',
-    apiKey: '',
     timeoutSeconds: 15,
     refreshMinutes: 0,
     cacheMinutes: 5,
@@ -115,6 +113,8 @@ export function mergeSettings(stored: unknown): Settings {
     }
   }
   if (!SORT_FIELDS.includes(result.orders.sort)) result.orders.sort = DEFAULT_SETTINGS.orders.sort
+  // Earlier versions saved an API key here; the key is now fixed at build time.
+  delete (result.api as Record<string, unknown>).apiKey
   return result
 }
 

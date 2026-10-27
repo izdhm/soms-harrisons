@@ -14,7 +14,6 @@ import { useAuth } from '../auth/AuthContext'
 import {
   RadioCards,
   Select,
-  SecretInput,
   SettingRow,
   TextInput,
   Toggle,
@@ -456,7 +455,7 @@ function ApiSection({ draft, update, errors = {} }: SectionProps) {
     try {
       const result = await testConnection({
         baseUrl: (a.baseUrl.trim() || ENV_API_CONFIG.baseUrl).replace(/\/+$/, ''),
-        apiKey: a.apiKey.trim() || ENV_API_CONFIG.apiKey,
+        apiKey: ENV_API_CONFIG.apiKey,
         timeoutMs: a.timeoutSeconds * 1000,
       })
       setTest({ state: 'ok', result })
@@ -482,13 +481,14 @@ function ApiSection({ draft, update, errors = {} }: SectionProps) {
           onChange={(v) => update('api', { baseUrl: v })}
         />
       </SettingRow>
-      <SettingRow label="API key" htmlFor="s-apikey" hint="Leave blank to use the build default.">
-        <SecretInput
-          id="s-apikey"
-          value={a.apiKey}
-          placeholder={ENV_API_CONFIG.apiKey ? 'Using build default' : 'Not configured'}
-          onChange={(v) => update('api', { apiKey: v })}
-        />
+      <SettingRow label="API key" htmlFor="s-apikey" hint="Built into the system and cannot be changed.">
+        <div className="text-field">
+          {/* Only a mask is rendered; the key itself never reaches the page. */}
+          <input id="s-apikey" type="password" value="********************" disabled readOnly />
+          <span className="text-field__icon" aria-hidden="true">
+            <LockIcon width="16" height="16" />
+          </span>
+        </div>
       </SettingRow>
       <SettingRow label="Request timeout" htmlFor="s-timeout" error={errors.timeoutSeconds}>
         <TextInput

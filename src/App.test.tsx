@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_STORAGE_KEY } from './settings/defaults'
@@ -144,6 +144,18 @@ describe('Signed-in system', () => {
     unmount()
     renderApp('/app/settings/general')
     expect(await screen.findByLabelText('Company name')).toHaveValue('Harrisons Test Branch')
+  })
+
+  it('keeps the API key locked and ignores a key saved by an older version', async () => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ api: { apiKey: 'old-saved-key' } }))
+    renderApp('/app/settings/api')
+
+    expect(await screen.findByLabelText('API key')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /show value/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    for (const [, init] of vi.mocked(fetch).mock.calls) {
+      expect((init?.headers as Record<string, string>)['x-assessment-key']).toBe('test-key')
+    }
   })
 
   it('blocks saving an invalid value', async () => {

@@ -17,7 +17,6 @@ const SettingsContext = createContext<SettingsContextValue | null>(null)
 function applyApiSettings(settings: Settings) {
   setApiConfig({
     baseUrl: settings.api.baseUrl.trim(),
-    apiKey: settings.api.apiKey.trim(),
     timeoutMs: settings.api.timeoutSeconds * 1000,
   })
 }

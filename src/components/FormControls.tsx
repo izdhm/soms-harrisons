@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { ChevronDownIcon, EyeIcon, EyeOffIcon } from './Icons'
+import type { ReactNode } from 'react'
+import { ChevronDownIcon } from './Icons'
 
 export function SettingRow({
   label,
@@ -69,41 +69,6 @@ export function TextInput({
         onChange={(e) => onChange(e.target.value)}
       />
       {suffix && <span className="text-field__suffix">{suffix}</span>}
-    </div>
-  )
-}
-
-export function SecretInput({
-  id,
-  value,
-  onChange,
-  placeholder,
-}: {
-  id: string
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
-}) {
-  const [visible, setVisible] = useState(false)
-  return (
-    <div className="text-field">
-      <input
-        id={id}
-        type={visible ? 'text' : 'password'}
-        value={value}
-        placeholder={placeholder}
-        autoComplete="off"
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <button
-        type="button"
-        className="text-field__btn"
-        onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? 'Hide value' : 'Show value'}
-      >
-        {visible ? <EyeOffIcon width="16" height="16" /> : <EyeIcon width="16" height="16" />}
-      </button>
     </div>
   )
 }
