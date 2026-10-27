@@ -2,7 +2,7 @@
 
 A sales order monitoring system for Harrisons Sabah Sdn Bhd, built for the IT Executive assessment. It helps a sales team follow orders across branches: a dashboard of totals and trends, a searchable order list with filters, and system settings. All order data comes live from the provided read-only mock REST API; nothing is hard-coded.
 
-**Live app:** _Netlify URL to be added after the first deploy_
+**Live app:** https://soms-harrisons.netlify.app/
 
 **Demo account:** on the sign-in page, press **Use demo account**, then **Sign in**. The account is defined in `src/auth/demoAccounts.ts`.
 
