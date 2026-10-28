@@ -499,6 +499,11 @@ li + li > .nav-link {
   min-width: 170px;
 }
 
+.date-range {
+  display: flex;
+  gap: 10px;
+}
+
 .updated-at {
   font-size: 13px;
   color: var(--muted);
@@ -1113,6 +1118,16 @@ li + li > .nav-link {
 
   .page-header__actions .field--select {
     flex: 1 1 100%;
+  }
+
+  .date-range {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .date-range .field--date {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .page-header__actions .btn {

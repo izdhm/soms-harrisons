@@ -32,6 +32,8 @@ export interface Formatter {
   hour: (date: Date) => number
   /** "2026-09" in the configured time zone, for grouping. */
   monthKey: (value: string) => string
+  /** "2026-09-30" in the configured time zone, the value of a date input. */
+  dayKey: (value: string | Date) => string
   /** "Sep 2026" from a month key. */
   monthLabel: (key: string, withYear?: boolean) => string
 }
@@ -115,6 +117,12 @@ export function createFormatter(options: Partial<FormatOptions> = {}): Formatter
       if (!d) return ''
       const { month, year } = dateParts(d)
       return `${year}-${month}`
+    },
+    dayKey: (value) => {
+      const d = value instanceof Date ? value : toDate(value)
+      if (!d) return ''
+      const { day, month, year } = dateParts(d)
+      return `${year}-${month}-${day}`
     },
     monthLabel: (key, withYear = false) => {
       const [year, month] = key.split('-')

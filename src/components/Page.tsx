@@ -109,3 +109,37 @@ export function SelectField({
     </div>
   )
 }
+
+/** A native date input in the inline-label field style. Values are "YYYY-MM-DD". */
+export function DateField({
+  id,
+  label,
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  min?: string
+  max?: string
+}) {
+  return (
+    <div className="field field--date">
+      <label htmlFor={id} className="field__label">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="date"
+        className="date-input"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  )
+}

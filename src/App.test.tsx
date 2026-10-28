@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_STORAGE_KEY } from './settings/defaults'
@@ -107,6 +107,28 @@ describe('Signed-in system', () => {
     expect(within(await tile('Total order value')).getByTitle('RM 500.05')).toBeInTheDocument()
     expect(within(await tile('Outstanding balance')).getByTitle('RM 162.35')).toBeInTheDocument()
     expect(screen.getAllByText('Borneo Fresh Trading').length).toBeGreaterThan(0)
+  })
+
+  it('narrows the dashboard to a custom date range', async () => {
+    const user = userEvent.setup()
+    renderApp('/app/dashboard')
+
+    await screen.findByText('Total orders', { selector: '.tile__label' })
+    await user.selectOptions(screen.getByLabelText('Period'), 'custom')
+
+    // The range opens on the days already shown: the first order to today.
+    const from = screen.getByLabelText('From')
+    expect(from).toHaveValue('2026-09-30')
+    expect(screen.getByLabelText('To')).toHaveValue(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }))
+    expect(new URLSearchParams(window.location.search).get('from')).toBe('2026-09-30')
+
+    fireEvent.change(from, { target: { value: '2026-10-01' } })
+    expect(await screen.findByText('No orders in this period')).toBeInTheDocument()
+    expect(new URLSearchParams(window.location.search).get('from')).toBe('2026-10-01')
+
+    await user.selectOptions(screen.getByLabelText('Period'), 'all')
+    expect(screen.queryByLabelText('From')).not.toBeInTheDocument()
+    expect(window.location.search).toBe('')
   })
 
   it('greets the signed-in user with the date and time', async () => {

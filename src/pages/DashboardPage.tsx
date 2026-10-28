@@ -14,7 +14,7 @@ import {
   WalletIcon,
   XCircleIcon,
 } from '../components/Icons'
-import { PageHeader, Panel, Segmented, SelectField } from '../components/Page'
+import { DateField, PageHeader, Panel, Segmented, SelectField } from '../components/Page'
 import { EmptyState, ErrorState, Skeleton } from '../components/States'
 import { StatusBadge } from '../components/StatusBadge'
 import { useApi } from '../hooks/useApi'
@@ -31,9 +31,12 @@ import {
   filterOrders,
   latest,
   openAging,
+  periodStart,
   rankBy,
+  toDateRange,
   totals,
   type Attention,
+  type DateRange,
   type Period,
 } from '../lib/analytics'
 import { useSettings } from '../settings/SettingsContext'
@@ -116,6 +119,7 @@ export default function DashboardPage() {
   const [params, setParams] = useSearchParams()
   const periodParam = params.get('period')
   const period: Period = isPeriod(periodParam) ? periodParam : 'all'
+  const range = useMemo(() => toDateRange(params.get('from'), params.get('to')), [params])
   const site = params.get('site') ?? ''
   const focus = params.get('focus')
 
@@ -142,22 +146,50 @@ export default function DashboardPage() {
     )
   }, [focus, dataset.rows, setParams])
 
-  function setFilter(key: 'period' | 'site', value: string) {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (!value || (key === 'period' && value === 'all')) next.delete(key)
-        else next.set(key, value)
-        return next
-      },
-      { replace: true },
-    )
+  // React Router passes updaters the params of the last render, which lag behind when the From
+  // and To dates change in quick succession, so each update starts from the live address instead.
+  function updateParams(edit: (next: URLSearchParams) => void) {
+    const next = new URLSearchParams(window.location.search)
+    edit(next)
+    setParams(next, { replace: true })
+  }
+
+  function setFilter(key: 'site' | 'from' | 'to', value: string) {
+    updateParams((next) => {
+      if (value) next.set(key, value)
+      else next.delete(key)
+    })
   }
 
   const now = useMemo(() => new Date(), [dataset.fetchedAt])
+  const today = fmt.dayKey(now)
+
+  // A custom range opens on the days the current period already covers, so the figures stay put
+  // until a date is changed.
+  function spanOf(p: Period): DateRange {
+    const times = (dataset.rows ?? []).map((r) => Date.parse(r.CreatedDateTime1))
+    const first = times.length ? Math.min(...times) : Number.NEGATIVE_INFINITY
+    const start = Math.max(periodStart(p, now), first)
+    return { from: Number.isFinite(start) ? fmt.dayKey(new Date(start)) : '', to: today }
+  }
+
+  function setPeriod(value: string) {
+    updateParams((next) => {
+      next.delete('from')
+      next.delete('to')
+      if (value === 'all') next.delete('period')
+      else next.set('period', value)
+      if (value === 'custom') {
+        const span = spanOf(period)
+        if (span.from) next.set('from', span.from)
+        next.set('to', span.to)
+      }
+    })
+  }
+
   const rows = useMemo(
-    () => (dataset.rows ? filterOrders(dataset.rows, { site, period }, now) : null),
-    [dataset.rows, site, period, now],
+    () => (dataset.rows ? filterOrders(dataset.rows, { site, period, range }, now, fmt.dayKey) : null),
+    [dataset.rows, site, period, range, now, fmt],
   )
 
   const view = useMemo(() => {
@@ -202,7 +234,7 @@ export default function DashboardPage() {
             id="dash-period"
             label="Period"
             value={period}
-            onChange={(v) => setFilter('period', v)}
+            onChange={setPeriod}
           >
             {PERIODS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -210,6 +242,25 @@ export default function DashboardPage() {
               </option>
             ))}
           </SelectField>
+          {period === 'custom' && (
+            <div className="date-range" role="group" aria-label="Custom range">
+              <DateField
+                id="dash-from"
+                label="From"
+                value={range.from}
+                max={range.to || today}
+                onChange={(v) => setFilter('from', v)}
+              />
+              <DateField
+                id="dash-to"
+                label="To"
+                value={range.to}
+                min={range.from || undefined}
+                max={today}
+                onChange={(v) => setFilter('to', v)}
+              />
+            </div>
+          )}
           <SelectField id="dash-site" label="Branch" value={site} onChange={(v) => setFilter('site', v)}>
             <option value="">All branches</option>
             {(meta.data?.facets.sites ?? []).map((s) => (

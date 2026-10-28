@@ -9,6 +9,7 @@ import {
   niceScale,
   openAging,
   rankBy,
+  toDateRange,
   totals,
 } from './analytics'
 import { createFormatter } from './format'
@@ -82,6 +83,26 @@ describe('time based views', () => {
   it('filters by branch and period', () => {
     expect(filterOrders(ROWS, { site: 'A10', period: 'all' }, NOW).map((r) => r.SalesId)).toEqual(['A', 'B'])
     expect(filterOrders(ROWS, { site: '', period: '90d' }, NOW).map((r) => r.SalesId)).toEqual(['A', 'C', 'D'])
+  })
+
+  it('filters by a custom range of whole days in the configured time zone', () => {
+    const { dayKey } = createFormatter()
+    const ids = (from: string, to: string, site = '') =>
+      filterOrders(ROWS, { site, period: 'custom', range: { from, to } }, NOW, dayKey).map((r) => r.SalesId)
+
+    // Order D is 31 Aug UTC but 1 Sep in Malaysia, so August ends without it.
+    expect(ids('2026-08-01', '2026-08-31')).toEqual(['C'])
+    expect(ids('2026-09-01', '2026-09-25')).toEqual(['A', 'D'])
+    expect(ids('2026-09-01', '')).toEqual(['A', 'D'])
+    expect(ids('', '2026-05-01')).toEqual(['B'])
+    expect(ids('', '', 'B20')).toEqual(['C', 'D'])
+  })
+
+  it('reads a custom range safely from the URL', () => {
+    expect(toDateRange('2026-05-01', '2026-06-30')).toEqual({ from: '2026-05-01', to: '2026-06-30' })
+    expect(toDateRange('2026-06-30', '2026-05-01')).toEqual({ from: '2026-05-01', to: '2026-06-30' })
+    expect(toDateRange('2026-02-30', 'yesterday')).toEqual({ from: '', to: '' })
+    expect(toDateRange(null, '2026-06-30')).toEqual({ from: '', to: '2026-06-30' })
   })
 
   it('buckets open orders by age', () => {

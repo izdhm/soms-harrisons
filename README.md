@@ -38,7 +38,7 @@ A sales order monitoring system for Harrisons Sabah Sdn Bhd, built for the IT Ex
   - KPI cards: total orders, open / pending, completed (delivered + invoiced), cancelled, total order value and outstanding balance.
   - Charts: orders by month (stacked by status, switchable between count and value), status breakdown, and open order aging.
   - Lists: needs attention (on hold, pending validation, high value, aged), branch performance, sales by product group, recent orders and top customers.
-  - Period and branch filters apply to every widget and are kept in the URL.
+  - Period and branch filters apply to every widget and are kept in the URL. The period is a preset (last 30, 90 or 180 days, year to date) or a custom range: pick "Custom range" and set From and To dates, counted in the configured time zone.
 - **Sales orders:**
   - The order list with status tabs, debounced search, a branch filter, sortable columns and paging.
   - An order detail panel.
@@ -199,14 +199,14 @@ src/
 
 ## Testing
 
-`npm test` runs 67 tests in 7 files:
+`npm test` runs 70 tests in 7 files:
 
-- **Unit:** formatting in different time zones, date formats and currency styles; the welcome clock and greeting; URL state with configured defaults; pagination window; CSV quoting and formula escaping; every analytics function (totals, month grouping across the UTC day boundary, status order, branch ranking, aging buckets, attention lists, axis scales).
+- **Unit:** formatting in different time zones, date formats and currency styles; the welcome clock and greeting; URL state with configured defaults; pagination window; CSV quoting and formula escaping; every analytics function (totals, month grouping across the UTC day boundary, custom date ranges and their URL parsing, status order, branch ranking, aging buckets, attention lists, axis scales).
 - **API client:** auth header and query parameters, 401 / 404 / 5xx handling, network failure, timeout and cancellation, and the connection test (meta details, rejected key).
 - **Sales orders page:** list and status counts, debounced search, branch filter and status tabs, empty state with clear filters, error with retry, stale responses ignored, detail panel open and close with Escape, deep link to a missing order.
 - **App:**
   - Sign in: the home page and photo credit, the redirect to sign in, a wrong password, the old `/login` link, demo sign-in returning to the requested page, and sign out.
-  - Workspace: dashboard tiles from the full dataset, the welcome banner (greeting, date and live clock), and placeholder modules.
+  - Workspace: dashboard tiles from the full dataset, the custom date range (prefilled dates, filtering, URL), the welcome banner (greeting, date and live clock), and placeholder modules.
   - Settings: saved values persist after a reload, an invalid value blocks saving, and the API key stays locked (a key saved by an older version is ignored).
 
 Checks beyond the test suite:

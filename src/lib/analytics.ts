@@ -5,7 +5,7 @@ import { STATUS_ORDER } from './status'
 
 const DAY_MS = 86_400_000
 
-export type Period = 'all' | '30d' | '90d' | '180d' | 'ytd'
+export type Period = 'all' | '30d' | '90d' | '180d' | 'ytd' | 'custom'
 
 export const PERIODS: { value: Period; label: string }[] = [
   { value: 'all', label: 'All time' },
@@ -13,7 +13,29 @@ export const PERIODS: { value: Period; label: string }[] = [
   { value: '90d', label: 'Last 90 days' },
   { value: '180d', label: 'Last 180 days' },
   { value: 'ytd', label: 'Year to date' },
+  { value: 'custom', label: 'Custom range' },
 ]
+
+/** Inclusive calendar days as "YYYY-MM-DD". An empty side leaves that end open. */
+export interface DateRange {
+  from: string
+  to: string
+}
+
+function dayOrEmpty(value: string | null | undefined): string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ''
+  const date = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value) ? value : ''
+}
+
+/** Reads a range from untrusted input (the URL), dropping bad dates and putting the ends in order. */
+export function toDateRange(from: string | null | undefined, to: string | null | undefined): DateRange {
+  const a = dayOrEmpty(from)
+  const b = dayOrEmpty(to)
+  return a && b && a > b ? { from: b, to: a } : { from: a, to: b }
+}
+
+const utcDayKey = (iso: string) => new Date(iso).toISOString().slice(0, 10)
 
 export function periodStart(period: Period, now: Date): number {
   switch (period) {
@@ -30,15 +52,27 @@ export function periodStart(period: Period, now: Date): number {
   }
 }
 
+/**
+ * Orders for a branch and period. A custom range compares calendar days from `dayKey`, so pass
+ * the formatter's key to count days in the configured time zone rather than in UTC.
+ */
 export function filterOrders(
   rows: SalesOrder[],
-  { site, period }: { site: string; period: Period },
+  { site, period, range }: { site: string; period: Period; range?: DateRange },
   now = new Date(),
+  dayKey: (iso: string) => string = utcDayKey,
 ): SalesOrder[] {
+  const inSite = (r: SalesOrder) => !site || r.InventSiteId === site
+  if (period === 'custom') {
+    const { from, to } = range ?? { from: '', to: '' }
+    return rows.filter((r) => {
+      if (!inSite(r)) return false
+      const day = dayKey(r.CreatedDateTime1)
+      return (!from || day >= from) && (!to || day <= to)
+    })
+  }
   const start = periodStart(period, now)
-  return rows.filter(
-    (r) => (!site || r.InventSiteId === site) && new Date(r.CreatedDateTime1).getTime() >= start,
-  )
+  return rows.filter((r) => inSite(r) && new Date(r.CreatedDateTime1).getTime() >= start)
 }
 
 export interface Totals {
